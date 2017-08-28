@@ -34,6 +34,9 @@ class LogStash::Outputs::Mongodb < LogStash::Outputs::Base
   # "_id" field in the event.
   config :generateId, :validate => :boolean, :default => false
 
+  # Number of insert attempts before reconnect to MongoDB
+  config :retries_before_reconnect, :validate => :number, :default => 3, :required => false
+
 
   # Bulk insert flag, set to true to allow bulk insertion, else it will insert events one by one.
   config :bulk, :validate => :boolean, :default => false
@@ -72,6 +75,7 @@ class LogStash::Outputs::Mongodb < LogStash::Outputs::Base
   end # def register
 
   def receive(event)
+    retries = 0
     begin
       # Our timestamp object now has a to_bson method, using it here
       # {}.merge(other) so we don't taint the event hash innards
@@ -111,6 +115,11 @@ class LogStash::Outputs::Mongodb < LogStash::Outputs::Base
           # to fix the issue.
       else
         sleep @retry_delay
+        retries += 1
+        if @retries_before_reconnect == retries
+          register
+          retries = 0
+        end
         retry
       end
     end
